@@ -7,17 +7,15 @@
 
   <link rel="stylesheet" href="style.css" />
 
+  <!-- ① 本地 UMD 版本，必须在业务脚本之前 -->
   <script defer src="libs/face-api.min.js"></script>
 
+  <!-- ② 你的业务逻辑 -->
   <script defer src="script.js"></script>
 </head>
 
 <body>
   <h1>Face-Controlled Piano Sheet Flipper</h1>
-
-  <div class="page-indicator-top">
-    <span id="topPageIndicator">No sheets loaded</span>
-  </div>
 
   <div class="upload-container">
     <input type="file" id="sheetInput" multiple />
@@ -27,7 +25,7 @@
 
   <div class="viewer" id="viewer">
     <img id="sheetDisplay" alt="Sheet Display" />
-    <div id="bottomPageIndicator"></div> 
+    <div id="pageIndicator"></div>
   </div>
 
   <div class="camera-container">
