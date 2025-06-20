@@ -24,7 +24,7 @@ const YAW_THRESHOLD = 15; // 偏航角阈值 (像素差值)，需要根据实际
     /* 2) 加载模型 */
     // 注意：如果您已经把模型文件下载到本地，建议使用相对路径 './models'
     // 否则如果直接使用 raw.githubusercontent.com 可能会遇到 CORS 或速率限制问题
-    const MODEL_URL = 'https://raw.githubusercontent.com/rgon006/MMM/main/models';
+    const MODEL_URL = 'https://raw.githubusercontent.com/rgon006/MMM3/main/models';
     await Promise.all([
       faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
       faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL)
