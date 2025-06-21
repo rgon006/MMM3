@@ -127,10 +127,37 @@ const LOCAL_SHEET_PREFIX = 'local_';
 
     /* 3) 打开摄像头 */
     const video = document.getElementById('video');
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: 640, height: 480 }
-    });
-    video.srcObject = stream;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          facingMode: 'user' // 尝试前置摄像头
+        }
+      });
+      video.srcObject = stream;
+      console.log('✅ 摄像头（前置）已打开');
+    } catch (err) {
+      console.warn('获取前置摄像头失败，尝试获取后置摄像头:', err);
+      // 如果前置摄像头不可用，尝试后置摄像头作为备用
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            facingMode: 'environment' // 尝试后置摄像头
+          }
+        });
+        video.srcObject = stream;
+        console.log('✅ 摄像头（后置）已打开');
+        alert('前置摄像头不可用，已尝试使用后置摄像头。');
+      } catch (err2) {
+        console.error('无法访问任何摄像头:', err2);
+        alert(`无法访问任何摄像头: ${err2.message}\n请确保已授权并尝试刷新页面。`);
+        return; // 如果都失败，则终止后续操作
+      }
+    }
+
 
     /* 4) 启动人脸检测循环 */
     detectFaces();
@@ -138,7 +165,7 @@ const LOCAL_SHEET_PREFIX = 'local_';
     // 从 Local Storage 加载之前上传的乐谱
     loadSheetsFromLocalStorage();
 
-    // ****** 新增：绑定所有上下翻页按钮事件 ******
+    // ****** 绑定所有上下翻页按钮事件 ******
     const topPrevBtn = document.getElementById('topPrevPageBtn');
     const topNextBtn = document.getElementById('topNextPageBtn');
     const bottomPrevBtn = document.getElementById('bottomPrevPageBtn');
@@ -159,7 +186,7 @@ const LOCAL_SHEET_PREFIX = 'local_';
 
   } catch (err) {
     console.error('Initialization failed:', err);
-    alert(`Camera error: ${err.message}`);
+    alert(`初始化失败: ${err.message}`);
     return;
   } finally {
     document.getElementById('loading').style.display = 'none';
