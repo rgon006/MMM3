@@ -9,10 +9,10 @@ const YAW_THRESHOLD = 15; // 偏航角阈值 (像素差值)，需要根据实际
 
 // ****** Cloudinary 配置 ******
 // TODO: 请将 "YOUR_CLOUDINARY_CLOUD_NAME" 替换为您的 Cloudinary Cloud name
-const CLOUDINARY_CLOUD_NAME = "YOUR_CLOUDINARY_CLOUD_NAME"; 
+const CLOUDINARY_CLOUD_NAME = "dje3ekclp"; 
 // TODO: 请将 "YOUR_UNSIGNED_UPLOAD_PRESET" 替换为您在 Cloudinary 控制台创建的无符号上传预设名称
 // 例如：如果您创建的预设名为 "my_unsigned_upload"，这里就写 "my_unsigned_upload"
-const CLOUDINARY_UPLOAD_PRESET = "YOUR_UNSIGNED_UPLOAD_PRESET"; 
+const CLOUDINARY_UPLOAD_PRESET = "my_unsigned_upload"; 
 
 // 存储乐谱URL到Local Storage的键名
 const LOCAL_STORAGE_SHEETS_KEY = 'pianoSheetUrls';
