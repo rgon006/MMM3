@@ -1,11 +1,22 @@
 /* ========== 全局状态 ========== */
-let sheetImages = [];
+let sheetImages = []; // 将存储乐谱的 URL 数组
 let currentPage = 0;
 let flipCooldown = false;
 // 新增：头部姿态检测的冷却时间
 let headTurnCooldown = false;
 const HEAD_TURN_COOLDOWN_MS = 1500; // 扭头翻页冷却时间 (毫秒)，可调整
 const YAW_THRESHOLD = 15; // 偏航角阈值 (像素差值)，需要根据实际测试调整
+
+// ****** Cloudinary 配置 ******
+// TODO: 请将 "YOUR_CLOUDINARY_CLOUD_NAME" 替换为您的 Cloudinary Cloud name
+const CLOUDINARY_CLOUD_NAME = "YOUR_CLOUDINARY_CLOUD_NAME"; 
+// TODO: 请将 "YOUR_UNSIGNED_UPLOAD_PRESET" 替换为您在 Cloudinary 控制台创建的无符号上传预设名称
+// 例如：如果您创建的预设名为 "my_unsigned_upload"，这里就写 "my_unsigned_upload"
+const CLOUDINARY_UPLOAD_PRESET = "YOUR_UNSIGNED_UPLOAD_PRESET"; 
+
+// 存储乐谱URL到Local Storage的键名
+const LOCAL_STORAGE_SHEETS_KEY = 'pianoSheetUrls';
+
 
 /* ========== 立即执行的初始化 ========== */
 (async () => {
@@ -24,7 +35,7 @@ const YAW_THRESHOLD = 15; // 偏航角阈值 (像素差值)，需要根据实际
     /* 2) 加载模型 */
     // 注意：如果您已经把模型文件下载到本地，建议使用相对路径 './models'
     // 否则如果直接使用 raw.githubusercontent.com 可能会遇到 CORS 或速率限制问题
-    const MODEL_URL = 'https://raw.githubusercontent.com/rgon006/MMM3/main/models';
+    const MODEL_URL = 'https://raw.githubusercontent.com/rgon006/MMM3/main/models'; // 您的模型URL
     await Promise.all([
       faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
       faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL)
@@ -41,6 +52,10 @@ const YAW_THRESHOLD = 15; // 偏航角阈值 (像素差值)，需要根据实际
 
     /* 4) 启动人脸检测循环 */
     detectFaces();
+
+    // ****** 新增：从 Local Storage 加载之前上传的乐谱 ******
+    loadSheetsFromLocalStorage();
+
   } catch (err) {
     console.error('Initialization failed:', err);
     alert(`Camera error: ${err.message}`);
@@ -53,7 +68,35 @@ const YAW_THRESHOLD = 15; // 偏航角阈值 (像素差值)，需要根据实际
   document.getElementById('sheetInput')
           .addEventListener('change', handleFileUpload);
 
-  /* ---------- 其余函数 ---------- */
+  /* ---------- Cloudinary & Local Storage 相关的辅助函数 ---------- */
+
+  // 从 Local Storage 加载乐谱 URL
+  function loadSheetsFromLocalStorage() {
+    console.log('正在从 Local Storage 加载乐谱...');
+    const storedUrls = localStorage.getItem(LOCAL_STORAGE_SHEETS_KEY);
+    if (storedUrls) {
+      try {
+        // 解析存储的 JSON 字符串为数组
+        sheetImages = JSON.parse(storedUrls);
+        currentPage = 0;
+        showPage(); // 显示加载后的第一页乐谱
+        console.log(`✅ 从 Local Storage 加载了 ${sheetImages.length} 张乐谱。`);
+      } catch (e) {
+        console.error('解析 Local Storage 中的乐谱 URL 失败:', e);
+        sheetImages = []; // 清空，避免数据损坏
+      }
+    } else {
+      console.log('Local Storage 中没有找到乐谱。');
+    }
+  }
+
+  // 将乐谱 URL 保存到 Local Storage
+  function saveSheetsToLocalStorage() {
+    localStorage.setItem(LOCAL_STORAGE_SHEETS_KEY, JSON.stringify(sheetImages));
+    console.log('乐谱已保存到 Local Storage。');
+  }
+
+  /* ---------- 其余函数（保持原有的或根据之前讨论进行更新） ---------- */
   function detectFaces() {
     const video = document.getElementById('video');
     const canvas = document.getElementById('overlay');
@@ -173,30 +216,69 @@ const YAW_THRESHOLD = 15; // 偏航角阈值 (像素差值)，需要根据实际
     return points.reduce((sum, pt) => sum + pt.x, 0) / points.length;
   }
 
+  // ****** 修改 handleFileUpload 函数以使用 Cloudinary 上传 ******
   async function handleFileUpload(e) {
     const files = e.target.files;
     if (!files.length) return;
     const btn = document.querySelector('.upload-btn');
-    const txt = btn.innerHTML;
-    btn.innerHTML = '<div class="spinner"></div> Processing…';
+    const originalBtnText = btn.innerHTML; // 保存原始按钮文本
+    btn.innerHTML = '<div class="spinner"></div> 上传中…';
+    btn.disabled = true; // 禁用按钮防止重复点击
+
+    const uploadedUrls = [];
 
     try {
-      sheetImages.forEach(u => URL.revokeObjectURL(u));
-      sheetImages = Array.from(files, f => URL.createObjectURL(f));
-      currentPage = 0;
-      showPage();
+      // 遍历所有选中的文件
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET); // 使用无符号上传预设
 
-      btn.innerHTML = `<span style="color:#27ae60">✓</span> Loaded ${files.length}`;
-      setTimeout(() => (btn.innerHTML = txt), 3000);
+        // Cloudinary 的上传 API URL 格式
+        const uploadUrl = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+
+        const response = await fetch(uploadUrl, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          throw new Error(`Cloudinary 上传失败: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        uploadedUrls.push(data.secure_url); // 获取安全 URL (HTTPS)
+        console.log(`✅ 上传 ${file.name} 成功:`, data.secure_url);
+      }
+
+      // 将新上传的URL添加到现有乐谱列表，并去重
+      // 这里使用 Set 来确保 URL 的唯一性
+      sheetImages = [...new Set([...sheetImages, ...uploadedUrls])];
+      saveSheetsToLocalStorage(); // 保存到 Local Storage
+
+      currentPage = 0;
+      showPage(); // 显示新加载的乐谱的第一页
+
+      btn.innerHTML = `<span style="color:#27ae60">✓</span> 上传并加载了 ${uploadedUrls.length} 张！`;
+      setTimeout(() => {
+          btn.innerHTML = originalBtnText;
+          btn.disabled = false;
+      }, 3000);
+
     } catch (err) {
-      console.error('Upload failed:', err);
-      btn.innerHTML = `<span style="color:#e74c3c">✗</span> Upload failed`;
-      setTimeout(() => (btn.innerHTML = txt), 3000);
+      console.error('上传乐谱失败:', err);
+      btn.innerHTML = `<span style="color:#e74c3c">✗</span> 上传失败`;
+      setTimeout(() => {
+          btn.innerHTML = originalBtnText;
+          btn.disabled = false;
+      }, 3000);
+      alert('上传乐谱失败。请检查控制台获取更多信息。');
     }
   }
 
   function showPage() {
     const img = document.getElementById('sheetDisplay');
+    // 假设页码指示器ID为 pageIndicator，如果您之前修改过顶部和底部指示器ID，请在这里相应修改
     const indicator = document.getElementById('pageIndicator');
 
     if (sheetImages.length) {
