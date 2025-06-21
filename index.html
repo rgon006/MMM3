@@ -22,19 +22,27 @@
     <div id="loading" class="spinner" style="display:none;"></div>
   </div>
 
-  <div id="topPageIndicator" class="page-indicator"></div> 
+  <div class="top-controls-container">
+    <div class="nav-buttons-pair">
+      <button id="topPrevPageBtn" class="nav-button">Prev</button>
+      <button id="topNextPageBtn" class="nav-button">Next</button>
+    </div>
+    <div id="topPageIndicator" class="page-indicator"></div> 
+  </div>
 
   <div class="viewer" id="viewer">
-    <button id="prevPageBtn" class="nav-button prev-button">Prev</button>
-    
     <img id="sheetDisplay" alt="Sheet Display" />
-    
-    <button id="nextPageBtn" class="nav-button next-button">Next</button>
-
     <div id="bottomPageIndicator" class="page-indicator"></div> 
   </div>
 
   <div id="pageNavigation" class="page-navigation"></div>
+
+  <div class="bottom-controls-container">
+    <div class="nav-buttons-pair">
+      <button id="bottomPrevPageBtn" class="nav-button">Prev</button>
+      <button id="bottomNextPageBtn" class="nav-button">Next</button>
+    </div>
+  </div>
 
   <div class="camera-container">
     <video id="video" width="640" height="480" autoplay></video>

@@ -133,20 +133,28 @@ const LOCAL_SHEET_PREFIX = 'local_';
     video.srcObject = stream;
 
     /* 4) 启动人脸检测循环 */
-    detectFaces(); // 此处调用现在确保在函数定义之后
+    detectFaces();
 
     // 从 Local Storage 加载之前上传的乐谱
     loadSheetsFromLocalStorage();
 
-    // 绑定上下翻页按钮事件
-    const prevBtn = document.getElementById('prevPageBtn');
-    const nextBtn = document.getElementById('nextPageBtn');
+    // ****** 新增：绑定所有上下翻页按钮事件 ******
+    const topPrevBtn = document.getElementById('topPrevPageBtn');
+    const topNextBtn = document.getElementById('topNextPageBtn');
+    const bottomPrevBtn = document.getElementById('bottomPrevPageBtn');
+    const bottomNextBtn = document.getElementById('bottomNextPageBtn');
 
-    if (prevBtn) {
-        prevBtn.addEventListener('click', prevPage);
+    if (topPrevBtn) {
+        topPrevBtn.addEventListener('click', prevPage);
     }
-    if (nextBtn) {
-        nextBtn.addEventListener('click', nextPage);
+    if (topNextBtn) {
+        topNextBtn.addEventListener('click', nextPage);
+    }
+    if (bottomPrevBtn) {
+        bottomPrevBtn.addEventListener('click', prevPage);
+    }
+    if (bottomNextBtn) {
+        bottomNextBtn.addEventListener('click', nextPage);
     }
 
   } catch (err) {
@@ -158,7 +166,6 @@ const LOCAL_SHEET_PREFIX = 'local_';
   }
 
   /* 5) 绑定文件上传事件 */
-  // 绑定“上传到 Cloud”按钮
   document.getElementById('uploadCloudBtn')
           .addEventListener('click', () => { 
             const fileInput = document.getElementById('sheetInput');
@@ -169,7 +176,6 @@ const LOCAL_SHEET_PREFIX = 'local_';
             handleCloudUpload(fileInput.files);
           });
 
-  // 绑定“上传到本地”按钮
   document.getElementById('uploadLocalBtn')
           .addEventListener('click', () => { 
             const fileInput = document.getElementById('sheetInput');
@@ -180,7 +186,6 @@ const LOCAL_SHEET_PREFIX = 'local_';
             handleLocalUpload(fileInput.files);
           });
           
-
   /* ---------- Cloudinary & Local Storage 相关的辅助函数 ---------- */
 
   function loadSheetsFromLocalStorage() {
@@ -305,13 +310,38 @@ const LOCAL_SHEET_PREFIX = 'local_';
     }
   }
 
+  // 辅助函数：统一更新所有翻页按钮的禁用状态
+  function updateNavButtonsState() {
+    const topPrevBtn = document.getElementById('topPrevPageBtn');
+    const topNextBtn = document.getElementById('topNextPageBtn');
+    const bottomPrevBtn = document.getElementById('bottomPrevPageBtn');
+    const bottomNextBtn = document.getElementById('bottomNextPageBtn');
+
+    const isDisabled = sheetImages.length === 0;
+    const isFirstPage = currentPage === 0;
+    const isLastPage = currentPage === sheetImages.length - 1;
+
+    // Prev buttons
+    if (topPrevBtn) {
+        topPrevBtn.disabled = isDisabled || isFirstPage;
+    }
+    if (bottomPrevBtn) {
+        bottomPrevBtn.disabled = isDisabled || isFirstPage;
+    }
+
+    // Next buttons
+    if (topNextBtn) {
+        topNextBtn.disabled = isDisabled || isLastPage;
+    }
+    if (bottomNextBtn) {
+        bottomNextBtn.disabled = isDisabled || isLastPage;
+    }
+  }
+
   function showPage() {
     const img = document.getElementById('sheetDisplay');
     const topIndicator = document.getElementById('topPageIndicator'); 
     const bottomIndicator = document.getElementById('bottomPageIndicator'); 
-
-    const prevBtn = document.getElementById('prevPageBtn');
-    const nextBtn = document.getElementById('nextPageBtn');
 
     if (sheetImages.length) {
       if (sheetImages[currentPage].startsWith(LOCAL_SHEET_PREFIX)) {
@@ -329,13 +359,7 @@ const LOCAL_SHEET_PREFIX = 'local_';
           bottomIndicator.textContent = pageText;
       }
       updatePageNavigation(); 
-
-      if (prevBtn) {
-          prevBtn.disabled = currentPage === 0;
-      }
-      if (nextBtn) {
-          nextBtn.disabled = currentPage === sheetImages.length - 1;
-      }
+      updateNavButtonsState(); // 调用统一更新按钮状态的函数
 
     } else {
       img.style.display = 'none';
@@ -346,13 +370,7 @@ const LOCAL_SHEET_PREFIX = 'local_';
           bottomIndicator.textContent = 'No sheets loaded';
       }
       updatePageNavigation(); 
-
-      if (prevBtn) {
-          prevBtn.disabled = true;
-      }
-      if (nextBtn) {
-          nextBtn.disabled = true;
-      }
+      updateNavButtonsState(); // 调用统一更新按钮状态的函数
     }
   }
 
@@ -361,10 +379,7 @@ const LOCAL_SHEET_PREFIX = 'local_';
     pageNavContainer.innerHTML = ''; 
 
     if (sheetImages.length === 0) {
-        const prevBtn = document.getElementById('prevPageBtn');
-        const nextBtn = document.getElementById('nextPageBtn');
-        if (prevBtn) prevBtn.disabled = true;
-        if (nextBtn) nextBtn.disabled = true;
+        updateNavButtonsState(); // 确保没有乐谱时禁用所有按钮
         return; 
     }
 
@@ -399,14 +414,7 @@ const LOCAL_SHEET_PREFIX = 'local_';
         span.classList.add('page-nav-ellipsis');
         pageNavContainer.appendChild(span);
     }
-    const prevBtn = document.getElementById('prevPageBtn');
-    const nextBtn = document.getElementById('nextPageBtn');
-    if (prevBtn) {
-        prevBtn.disabled = currentPage === 0;
-    }
-    if (nextBtn) {
-        nextBtn.disabled = currentPage === sheetImages.length - 1;
-    }
+    updateNavButtonsState(); // 在生成页码导航后，也更新上下翻页按钮的状态
   }
 
 
