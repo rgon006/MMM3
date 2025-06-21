@@ -8,11 +8,12 @@ const YAW_THRESHOLD = 15;
 
 // ****** Cloudinary 配置 ******
 const CLOUDINARY_CLOUD_NAME = "dje3ekclp"; 
-const CLOUDINARY_UPLOAD_PRESET = "my_unsigned_upload"; 
+const CLOUDINARY_UPLOAD_PRESET = "my_unsigned_upload"; // 仍旧使用无符号上传预设
 
 // 存储乐谱URL到Local Storage的键名
 const LOCAL_STORAGE_SHEETS_KEY = 'pianoSheetUrls';
-
+// 本地上传乐谱的标识前缀
+const LOCAL_SHEET_PREFIX = 'local_';
 
 /* ========== 立即执行的初始化 ========== */
 (async () => {
@@ -47,10 +48,10 @@ const LOCAL_STORAGE_SHEETS_KEY = 'pianoSheetUrls';
     /* 4) 启动人脸检测循环 */
     detectFaces();
 
-    // ****** 从 Local Storage 加载之前上传的乐谱 ******
+    // 从 Local Storage 加载之前上传的乐谱
     loadSheetsFromLocalStorage();
 
-    // ****** 新增：绑定上下翻页按钮事件 ******
+    // 绑定上下翻页按钮事件
     const prevBtn = document.getElementById('prevPageBtn');
     const nextBtn = document.getElementById('nextPageBtn');
 
@@ -61,7 +62,6 @@ const LOCAL_STORAGE_SHEETS_KEY = 'pianoSheetUrls';
         nextBtn.addEventListener('click', nextPage);
     }
 
-
   } catch (err) {
     console.error('Initialization failed:', err);
     alert(`Camera error: ${err.message}`);
@@ -71,8 +71,28 @@ const LOCAL_STORAGE_SHEETS_KEY = 'pianoSheetUrls';
   }
 
   /* 5) 绑定文件上传事件 */
-  document.getElementById('sheetInput')
-          .addEventListener('change', handleFileUpload);
+  // 绑定“上传到 Cloud”按钮
+  document.getElementById('uploadCloudBtn')
+          .addEventListener('click', () => { // 使用箭头函数传递 event 给 handleCloudUpload
+            const fileInput = document.getElementById('sheetInput');
+            if (fileInput.files.length === 0) {
+                alert('请选择乐谱文件进行上传！');
+                return;
+            }
+            handleCloudUpload(fileInput.files);
+          });
+
+  // 绑定“上传到本地”按钮
+  document.getElementById('uploadLocalBtn')
+          .addEventListener('click', () => { // 使用箭头函数传递 event 给 handleLocalUpload
+            const fileInput = document.getElementById('sheetInput');
+            if (fileInput.files.length === 0) {
+                alert('请选择乐谱文件进行上传！');
+                return;
+            }
+            handleLocalUpload(fileInput.files);
+          });
+          
 
   /* ---------- Cloudinary & Local Storage 相关的辅助函数 ---------- */
 
@@ -82,9 +102,12 @@ const LOCAL_STORAGE_SHEETS_KEY = 'pianoSheetUrls';
     if (storedUrls) {
       try {
         sheetImages = JSON.parse(storedUrls);
+        // 清理可能已失效的本地 URL 对象
+        sheetImages = sheetImages.filter(url => !url.startsWith(LOCAL_SHEET_PREFIX) || URL.createObjectURL); // 简单检查，但实际URL对象已失效
         currentPage = 0;
         showPage(); // 显示加载后的第一页乐谱
         updatePageNavigation(); // 加载后更新页码导航
+        console.log(`✅ 从 Local Storage 加载了 ${sheetImages.length} 张乐谱。`);
       } catch (e) {
         console.error('解析 Local Storage 中的乐谱 URL 失败:', e);
         sheetImages = []; 
@@ -95,101 +118,63 @@ const LOCAL_STORAGE_SHEETS_KEY = 'pianoSheetUrls';
   }
 
   function saveSheetsToLocalStorage() {
-    localStorage.setItem(LOCAL_STORAGE_SHEETS_KEY, JSON.stringify(sheetImages));
-    console.log('乐谱已保存到 Local Storage。');
+    // 过滤掉本地 URL，因为它们在刷新后会失效，不值得存储
+    const urlsToSave = sheetImages.filter(url => !url.startsWith(LOCAL_SHEET_PREFIX));
+    localStorage.setItem(LOCAL_STORAGE_SHEETS_KEY, JSON.stringify(urlsToSave));
+    console.log('乐谱已保存到 Local Storage (仅 Cloudinary URL)。');
   }
 
-  /* ---------- 其余函数（保持原有的或根据之前讨论进行更新） ---------- */
-  function detectFaces() {
-    // ... (此函数内容保持不变) ...
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('overlay');
-    const displaySize = { width: video.width, height: video.height };
-    faceapi.matchDimensions(canvas, displaySize);
-
-    setInterval(async () => {
-      if (video.readyState !== 4) return;
-      
-      if (!faceapi.nets.faceLandmark68Net.isLoaded) {
-          console.warn('FaceLandmark68Net 未加载，跳过地标检测相关功能。');
-          return;
-      }
-
-      const detections = await faceapi
-        .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
-        .withFaceLandmarks();
-
-      const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      const resized = faceapi.resizeResults(detections, displaySize);
-      faceapi.draw.drawFaceLandmarks(canvas, resized);
-
-      for (const d of resized) {
-        if (!d.landmarks) {
-            console.warn('当前检测对象没有地标信息，跳过嘴巴和头部姿态检测。');
-            continue;
-        }
-
-        const mouth = d.landmarks.getMouth();
-        if (mouth && mouth.length >= 20) {
-            const topLipY = averageY([
-              mouth[2], mouth[3], mouth[4], mouth[13], mouth[14], mouth[15]
-            ]);
-            const bottomLipY = averageY([
-              mouth[8], mouth[9], mouth[10], mouth[17], mouth[18], mouth[19]
-            ]);
-            const mouthHeight = bottomLipY - topLipY;
-            if (mouthHeight > 15) {
-              nextPage();
-            }
-        }
-
-        if (!headTurnCooldown) {
-            const leftEye = d.landmarks.getLeftEye();
-            const rightEye = d.landmarks.getRightEye();
-            const nose = d.landmarks.getNose();
-
-            if (leftEye.length > 0 && rightEye.length > 0 && nose.length > 0) {
-                const leftEyeCenterX = averageX(leftEye);
-                const rightEyeCenterX = averageX(rightEye);
-                const noseTipX = nose[0].x;
-
-                const eyeMidPointX = (leftEyeCenterX + rightEyeCenterX) / 2;
-                const yawDifference = noseTipX - eyeMidPointX;
-
-                if (yawDifference > YAW_THRESHOLD) {
-                    console.log('检测到头向左转，翻回上页！');
-                    prevPage();
-                    headTurnCooldown = true;
-                    setTimeout(() => (headTurnCooldown = false), HEAD_TURN_COOLDOWN_MS);
-                } else if (yawDifference < -YAW_THRESHOLD) {
-                    console.log('检测到头向右转，翻到下页！');
-                    nextPage();
-                    headTurnCooldown = true;
-                    setTimeout(() => (headTurnCooldown = false), HEAD_TURN_COOLDOWN_MS);
-                }
-            }
-        }
-      }
-    }, 300);
-  }
-
-  function averageY(points) {
-    if (!points || points.length === 0) return 0;
-    return points.reduce((sum, pt) => sum + pt.y, 0) / points.length;
-  }
-
-  function averageX(points) {
-    if (!points || points.length === 0) return 0;
-    return points.reduce((sum, pt) => sum + pt.x, 0) / points.length;
-  }
-
-  async function handleFileUpload(e) {
-    // ... (此函数内容保持不变) ...
-    const files = e.target.files;
+  /* ---------- 新增：处理本地文件上传 ---------- */
+  function handleLocalUpload(files) {
     if (!files.length) return;
-    const btn = document.querySelector('.upload-btn');
+    const btn = document.getElementById('uploadLocalBtn');
+    const originalBtnText = btn.innerHTML;
+    btn.innerHTML = '<div class="spinner"></div> 加载中…';
+    btn.disabled = true;
+
+    try {
+      // 撤销之前所有本地创建的 URL，防止内存泄漏
+      sheetImages.forEach(u => {
+        if (u.startsWith(LOCAL_SHEET_PREFIX)) {
+          URL.revokeObjectURL(u.substring(LOCAL_SHEET_PREFIX.length));
+        }
+      });
+
+      // 为新选择的文件创建 Blob URL，并添加前缀以区分
+      const newLocalUrls = Array.from(files, f => LOCAL_SHEET_PREFIX + URL.createObjectURL(f));
+      
+      // 合并新加载的本地乐谱和现有的 Cloudinary 乐谱
+      // 注意：这里会将本地乐谱添加到列表，但它们不会被保存到 Local Storage
+      sheetImages = [...newLocalUrls, ...sheetImages.filter(url => !url.startsWith(LOCAL_SHEET_PREFIX))];
+
+      currentPage = 0;
+      showPage();
+      updatePageNavigation();
+
+      btn.innerHTML = `<span style="color:#27ae60">✓</span> 加载了 ${files.length} 张！`;
+      setTimeout(() => {
+        btn.innerHTML = originalBtnText;
+        btn.disabled = false;
+      }, 3000);
+
+      alert('本地乐谱已加载！刷新页面后需要重新上传。');
+
+    } catch (err) {
+      console.error('加载本地乐谱失败:', err);
+      btn.innerHTML = `<span style="color:#e74c3c">✗</span> 加载失败`;
+      setTimeout(() => {
+        btn.innerHTML = originalBtnText;
+        btn.disabled = false;
+      }, 3000);
+      alert('加载本地乐谱失败。请检查控制台获取更多信息。');
+    }
+  }
+
+
+  /* ---------- 修改：处理 Cloudinary 文件上传 (仍旧使用无符号上传) ---------- */
+  async function handleCloudUpload(files) {
+    if (!files.length) return;
+    const btn = document.getElementById('uploadCloudBtn'); // 针对 Cloudinary 按钮
     const originalBtnText = btn.innerHTML; 
     btn.innerHTML = '<div class="spinner"></div> 上传中…';
     btn.disabled = true; 
@@ -218,9 +203,11 @@ const LOCAL_STORAGE_SHEETS_KEY = 'pianoSheetUrls';
         console.log(`✅ 上传 ${file.name} 成功:`, data.secure_url);
       }
 
+      // 将新上传的URL添加到现有乐谱列表，并去重
+      // 注意：这里要确保不清除本地加载的乐谱，如果它们在当前会话中存在
       sheetImages = [...new Set([...sheetImages, ...uploadedUrls])];
-      saveSheetsToLocalStorage(); 
-      
+      saveSheetsToLocalStorage(); // 仅保存 Cloudinary URL
+
       currentPage = 0;
       showPage(); 
       updatePageNavigation(); 
@@ -243,17 +230,20 @@ const LOCAL_STORAGE_SHEETS_KEY = 'pianoSheetUrls';
   }
 
   function showPage() {
-    // ... (此函数内容保持不变) ...
     const img = document.getElementById('sheetDisplay');
     const topIndicator = document.getElementById('topPageIndicator'); 
     const bottomIndicator = document.getElementById('bottomPageIndicator'); 
 
-    // 新增：获取上下翻页按钮
     const prevBtn = document.getElementById('prevPageBtn');
     const nextBtn = document.getElementById('nextPageBtn');
 
     if (sheetImages.length) {
-      img.src = sheetImages[currentPage];
+      // 检查当前 URL 是否是本地文件 URL
+      if (sheetImages[currentPage].startsWith(LOCAL_SHEET_PREFIX)) {
+        img.src = sheetImages[currentPage].substring(LOCAL_SHEET_PREFIX.length);
+      } else {
+        img.src = sheetImages[currentPage];
+      }
       img.style.display = 'block';
       const pageText = `Page: ${currentPage + 1}/${sheetImages.length}`;
 
@@ -265,7 +255,6 @@ const LOCAL_STORAGE_SHEETS_KEY = 'pianoSheetUrls';
       }
       updatePageNavigation(); 
 
-      // 新增：根据当前页码禁用/启用按钮
       if (prevBtn) {
           prevBtn.disabled = currentPage === 0;
       }
@@ -283,7 +272,6 @@ const LOCAL_STORAGE_SHEETS_KEY = 'pianoSheetUrls';
       }
       updatePageNavigation(); 
 
-      // 新增：没有乐谱时禁用所有按钮
       if (prevBtn) {
           prevBtn.disabled = true;
       }
@@ -294,12 +282,10 @@ const LOCAL_STORAGE_SHEETS_KEY = 'pianoSheetUrls';
   }
 
   function updatePageNavigation() {
-    // ... (此函数内容保持不变) ...
     const pageNavContainer = document.getElementById('pageNavigation');
     pageNavContainer.innerHTML = ''; 
 
     if (sheetImages.length === 0) {
-        // 没有乐谱时也禁用上下翻页按钮
         const prevBtn = document.getElementById('prevPageBtn');
         const nextBtn = document.getElementById('nextPageBtn');
         if (prevBtn) prevBtn.disabled = true;
@@ -338,7 +324,6 @@ const LOCAL_STORAGE_SHEETS_KEY = 'pianoSheetUrls';
         span.classList.add('page-nav-ellipsis');
         pageNavContainer.appendChild(span);
     }
-    // 确保在生成页码导航后，上下翻页按钮的状态也更新
     const prevBtn = document.getElementById('prevPageBtn');
     const nextBtn = document.getElementById('nextPageBtn');
     if (prevBtn) {
@@ -352,7 +337,7 @@ const LOCAL_STORAGE_SHEETS_KEY = 'pianoSheetUrls';
 
   function nextPage() {
     if (!sheetImages.length || flipCooldown) return;
-    if (currentPage < sheetImages.length - 1) { // 检查是否已是最后一页
+    if (currentPage < sheetImages.length - 1) { 
         flipCooldown = true;
         currentPage++;
         showPage();
@@ -362,7 +347,7 @@ const LOCAL_STORAGE_SHEETS_KEY = 'pianoSheetUrls';
 
   function prevPage() {
     if (!sheetImages.length || flipCooldown) return;
-    if (currentPage > 0) { // 检查是否已是第一页
+    if (currentPage > 0) { 
         flipCooldown = true;
         currentPage--;
         showPage();

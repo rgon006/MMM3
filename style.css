@@ -1,29 +1,62 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Face-Controlled Piano Sheet Flipper</title>
-  <link rel="stylesheet" href="style.css">
-  <script src="https://cdn.jsdelivr.net/npm/face-api.js@latest"></script>
-  <script defer src="script.js"></script>
-</head>
-<body>
-  <h1>Face-Controlled Piano Sheet Flipper</h1>
-  <div class="upload-container">
-    <input type="file" id="sheetInput" multiple />
-    <button class="upload-btn">上传乐谱</button>
-    <div id="loading" class="spinner" style="display:none;"></div>
-  </div>
-  
-  <div class="viewer" id="viewer">
-    <img id="sheetDisplay" alt="Sheet Display" />
-    <div id="pageIndicator"></div>
-  </div>
-  
-  <div class="camera-container">
-    <video id="video" width="640" height="480" autoplay></video>
-    <canvas id="overlay" width="640" height="480"></canvas>
-  </div>
-</body>
-</html>
+/* style.css */
+
+/* ... 您已有的样式 ... */
+
+/* 调整 upload-container 的布局，使两个按钮并排 */
+.upload-container {
+  display: flex; /* 使用 flexbox 布局 */
+  flex-wrap: wrap; /* 允许元素换行 */
+  justify-content: center; /* 居中对齐 */
+  align-items: center;
+  gap: 10px; /* 按钮和输入框之间的间距 */
+  margin-bottom: 20px;
+}
+
+/* 按钮样式（如果有差异化需求，可以为 #uploadCloudBtn 和 #uploadLocalBtn 单独设置） */
+.upload-btn {
+  background-color: #4CAF50; /* 绿色 */
+  color: white;
+  padding: 10px 15px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1em;
+  transition: background-color 0.3s ease;
+}
+
+#uploadCloudBtn {
+    background-color: #007bff; /* 蓝色 */
+}
+
+#uploadLocalBtn {
+    background-color: #6c757d; /* 灰色 */
+}
+
+.upload-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.upload-btn:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+/* Spinner 样式，如果上传按钮内部有 spinner */
+.spinner {
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top: 2px solid #fff;
+  border-radius: 50%;
+  width: 1em;
+  height: 1em;
+  animation: spin 1s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 5px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ... 其他现有样式 ... */
