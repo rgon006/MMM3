@@ -6,6 +6,13 @@ let headTurnCooldown = false;
 const HEAD_TURN_COOLDOWN_MS = 1500;
 const YAW_THRESHOLD = 15;
 
+// ****** 新增：手势检测相关常量 ******
+let handGestureCooldown = false; // 手势翻页冷却
+const HAND_COOLDOWN_MS = 1500; // 手势翻页冷却时间 (毫秒)
+// 举手Y坐标阈值百分比 (手腕Y坐标低于此阈值算举手，0是顶部，1是底部)
+// 例如0.4表示手腕在视频上半部分40%以上
+const RAISE_HAND_Y_THRESHOLD_PERCENT = 0.4; 
+
 // ****** Cloudinary 配置 ******
 const CLOUDINARY_CLOUD_NAME = "dje3ekclp"; 
 const CLOUDINARY_UPLOAD_PRESET = "my_unsigned_upload"; 
@@ -17,18 +24,24 @@ const LOCAL_SHEET_PREFIX = 'local_';
 
 /* ========== 立即执行的初始化 ========== */
 (async () => {
-  /* 0) 检查 faceapi 是否存在 */
+  /* 0) 检查 faceapi 和 MediaPipe 是否存在 */
   if (!window.faceapi) {
     alert('face-api.min.js 没加载到，检查 libs/face-api.min.js 路径或服务器根目录');
     return;
   }
+  // 检查 MediaPipe Hands 是否加载
+  if (!window.Hands) {
+    alert('MediaPipe Hands 没加载到，检查 https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.js 路径');
+    return;
+  }
   const faceapi = window.faceapi;
   console.log('✅ faceapi 准备就绪', faceapi);
+  console.log('✅ MediaPipe Hands 准备就绪', window.Hands); // 确认 MediaPipe Hands 加载
 
   /* 1) 显示加载动画 */
   document.getElementById('loading').style.display = 'block';
 
-  /* ---------- 核心人脸检测和辅助函数 (Moved to top of IIFE) ---------- */
+  /* ---------- 核心人脸检测和辅助函数 ---------- */
   function detectFaces() {
     const video = document.getElementById('video');
     const canvas = document.getElementById('overlay');
@@ -38,6 +51,7 @@ const LOCAL_SHEET_PREFIX = 'local_';
     setInterval(async () => {
       if (video.readyState !== 4) return;
       
+      // 检查 FaceLandmark68Net 是否加载，避免错误
       if (!faceapi.nets.faceLandmark68Net.isLoaded) {
           console.warn('FaceLandmark68Net 未加载，跳过地标检测相关功能。');
           return;
@@ -68,7 +82,7 @@ const LOCAL_SHEET_PREFIX = 'local_';
               mouth[8], mouth[9], mouth[10], mouth[17], mouth[18], mouth[19]
             ]);
             const mouthHeight = bottomLipY - topLipY;
-            if (mouthHeight > 15) {
+            if (mouthHeight > 15) { // 嘴巴张开超过阈值
               nextPage();
             }
         }
@@ -86,12 +100,12 @@ const LOCAL_SHEET_PREFIX = 'local_';
                 const eyeMidPointX = (leftEyeCenterX + rightEyeCenterX) / 2;
                 const yawDifference = noseTipX - eyeMidPointX;
 
-                if (yawDifference > YAW_THRESHOLD) {
+                if (yawDifference > YAW_THRESHOLD) { // 头向左转
                     console.log('检测到头向左转，翻回上页！');
                     prevPage();
                     headTurnCooldown = true;
                     setTimeout(() => (headTurnCooldown = false), HEAD_TURN_COOLDOWN_MS);
-                } else if (yawDifference < -YAW_THRESHOLD) {
+                } else if (yawDifference < -YAW_THRESHOLD) { // 头向右转
                     console.log('检测到头向右转，翻到下页！');
                     nextPage();
                     headTurnCooldown = true;
@@ -158,9 +172,11 @@ const LOCAL_SHEET_PREFIX = 'local_';
       }
     }
 
-
     /* 4) 启动人脸检测循环 */
     detectFaces();
+
+    // ****** 新增：设置手部检测 ******
+    setupHandDetection(); // 调用新的手部检测设置函数
 
     // 从 Local Storage 加载之前上传的乐谱
     loadSheetsFromLocalStorage();
@@ -462,6 +478,100 @@ const LOCAL_SHEET_PREFIX = 'local_';
         currentPage--;
         showPage();
         setTimeout(() => (flipCooldown = false), 1000);
+    }
+  }
+
+
+  /* ---------- 新增：MediaPipe Hands 相关逻辑 ---------- */
+  async function setupHandDetection() {
+    const videoElement = document.getElementById('video');
+    // MediaPipe Hands 模型路径
+    const hands = new Hands({
+      locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/${file}`;
+      }
+    });
+
+    hands.setOptions({
+      maxNumHands: 2, // 最多检测两只手
+      modelComplexity: 1, // 模型复杂度，0, 1, 2。越高越准但越慢
+      minDetectionConfidence: 0.7, // 最小检测置信度
+      minTrackingConfidence: 0.7 // 最小跟踪置信度
+    });
+
+    hands.onResults(onHandDetectionResults); // 设置回调函数
+
+    // 使用 Camera 对象发送视频帧到 MediaPipe
+    // Camera API 通常用于 MediaPipe 示例，以确保帧被正确处理
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await hands.send({ image: videoElement });
+      },
+      width: 640, // 确保与video元素的宽度一致
+      height: 480 // 确保与video元素的高度一致
+    });
+    camera.start();
+    console.log('✅ MediaPipe Hands 检测已启动');
+  }
+
+  function onHandDetectionResults(results) {
+    // 检查是否处于手势冷却期，如果是则不处理
+    if (handGestureCooldown) {
+      return; 
+    }
+
+    // 获取视频元素的实际尺寸，用于将归一化坐标转换为像素坐标
+    const videoElement = document.getElementById('video');
+    const videoHeight = videoElement.offsetHeight;
+    const videoWidth = videoElement.offsetWidth;
+    // 计算举手Y坐标的像素阈值
+    // MediaPipe的Y轴0是顶部，所以Y值越小表示越靠近顶部
+    const raiseYThresholdPx = videoHeight * RAISE_HAND_Y_THRESHOLD_PERCENT; 
+
+    let leftHandRaised = false; // 用户自己的左手是否举起
+    let rightHandRaised = false; // 用户自己的右手是否举起
+
+    if (results.multiHandLandmarks && results.multiHandedness) {
+      // 遍历检测到的每只手
+      for (let i = 0; i < results.multiHandLandmarks.length; i++) {
+        const landmarks = results.multiHandLandmarks[i];
+        const handedness = results.multiHandedness[i].label; // "Left" 或 "Right"
+
+        // 提取手腕关键点 (landmark 0) 的归一化 Y 坐标
+        const wristY = landmarks[0].y * videoHeight; // 转换为像素坐标
+        const wristX = landmarks[0].x * videoWidth; // 转换为像素坐标
+
+        // 判断手是否举起：手腕 Y 坐标低于阈值（即更靠近屏幕顶部）
+        const isRaised = wristY < raiseYThresholdPx;
+        
+        if (isRaised) {
+          // 在前置摄像头（user facingMode）下，画面是镜像的：
+          // 用户自己的右手 (MediaPipe label 'Left') 会出现在屏幕的左侧。
+          // 用户自己的左手 (MediaPipe label 'Right') 会出现在屏幕的右侧。
+
+          if (handedness === 'Left' && wristX < videoWidth / 2) {
+              // 识别到用户自己的右手 (MediaPipe label 'Left') 且在屏幕左半边
+              rightHandRaised = true; // 标记用户右手举起
+              console.log("检测到举起右手 (翻下一页)");
+          } else if (handedness === 'Right' && wristX > videoWidth / 2) {
+              // 识别到用户自己的左手 (MediaPipe label 'Right') 且在屏幕右半边
+              leftHandRaised = true; // 标记用户左手举起
+              console.log("检测到举起左手 (翻上一页)");
+          }
+        }
+      }
+    }
+
+    // 根据检测结果触发翻页
+    // 优先处理左手（向后翻页），如果同时举起，只会触发一个
+    if (leftHandRaised) {
+      prevPage();
+      handGestureCooldown = true;
+      setTimeout(() => (handGestureCooldown = false), HAND_COOLDOWN_MS);
+    } else if (rightHandRaised) {
+      nextPage();
+      handGestureCooldown = true;
+      setTimeout(() => (handGestureCooldown = false), HAND_COOLDOWN_MS);
     }
   }
 
