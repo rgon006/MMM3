@@ -11,7 +11,7 @@ let handGestureCooldown = false; // 手势翻页冷却
 const HAND_COOLDOWN_MS = 1500; // 手势翻页冷却时间 (毫秒)
 // 举手Y坐标阈值百分比 (手腕Y坐标低于此阈值算举手，0是顶部，1是底部)
 // 例如0.4表示手腕在视频上半部分40%以上
-const RAISE_HAND_Y_THRESHOLD_PERCENT = 0.4; 
+const RAISE_HAND_Y_THRESHOLD_PERCENT = 0.3; 
 
 // ****** Cloudinary 配置 ******
 const CLOUDINARY_CLOUD_NAME = "dje3ekclp"; 
