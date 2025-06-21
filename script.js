@@ -278,16 +278,33 @@ const LOCAL_STORAGE_SHEETS_KEY = 'pianoSheetUrls';
 
   function showPage() {
     const img = document.getElementById('sheetDisplay');
-    // 假设页码指示器ID为 pageIndicator，如果您之前修改过顶部和底部指示器ID，请在这里相应修改
-    const indicator = document.getElementById('pageIndicator');
+    // 获取新的顶部页码指示器元素
+    const topIndicator = document.getElementById('topPageIndicator'); 
+    // 获取新的底部页码指示器元素
+    const bottomIndicator = document.getElementById('bottomPageIndicator'); 
 
     if (sheetImages.length) {
       img.src = sheetImages[currentPage];
       img.style.display = 'block';
-      indicator.textContent = `Page: ${currentPage + 1}/${sheetImages.length}`;
+      const pageText = `Page: ${currentPage + 1}/${sheetImages.length}`;
+
+      // 更新顶部指示器
+      if (topIndicator) {
+          topIndicator.textContent = pageText;
+      }
+      // 更新底部指示器
+      if (bottomIndicator) {
+          bottomIndicator.textContent = pageText;
+      }
     } else {
       img.style.display = 'none';
-      indicator.textContent = 'No sheets loaded';
+      // 当没有乐谱时，清空或显示提示
+      if (topIndicator) {
+          topIndicator.textContent = 'No sheets loaded';
+      }
+      if (bottomIndicator) {
+          bottomIndicator.textContent = 'No sheets loaded';
+      }
     }
   }
 
